@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>單字卡</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="單字卡">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f5f6f2">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <h1 id="title" data-alt="筆記">單字卡</h1>
+  <span id="topinfo" class="muted"></span>
+</header>
+
+<main id="main">
+  <!-- 首頁 -->
+  <section id="v-home" class="view">
+    <div class="cards4">
+      <div class="stat"><span class="muted">待複習</span><b id="hDue">0</b></div>
+      <div class="stat"><span class="muted">今日新單字</span><b id="hNew">0</b></div>
+      <div class="stat"><span class="muted">今日已完成</span><b id="hDone">0</b></div>
+      <div class="stat"><span class="muted">連續學習</span><b id="hStreak">0 天</b></div>
+    </div>
+    <div class="goal"><div class="bar"><i id="hGoalBar"></i></div><span class="muted" id="hGoalTxt"></span></div>
+    <button class="primary big" id="hStart">開始複習</button>
+    <div class="tiles">
+      <button class="tile" data-go="practice"><span class="en">Aa</span><span data-alt="測驗">練習</span></button>
+      <button class="tile" data-go="words"><span class="en">ABC</span><span data-alt="清單">單字本</span></button>
+    </div>
+    <h2>學習紀錄</h2>
+    <div class="panel">
+      <div class="chart" id="hChart"></div>
+      <div class="legend muted"><span>近 14 天每日作答數</span><span id="hAcc"></span></div>
+    </div>
+    <div class="panel kv" id="hCounts"></div>
+  </section>
+
+  <!-- 單字卡複習 -->
+  <section id="v-review" class="view" hidden>
+    <div class="rv-top"><span class="muted" id="rvProg"></span><button class="ghost" id="rvExit">結束</button></div>
+    <div class="flash" id="flash">
+      <div class="front" id="rvFront"></div>
+      <div class="back" id="rvBack" hidden></div>
+    </div>
+    <button class="primary big" id="rvShow">顯示答案</button>
+    <div class="rates" id="rvRates" hidden>
+      <button data-r="1" class="r1"><b>忘了</b><span id="rt1"></span></button>
+      <button data-r="2" class="r2"><b>困難</b><span id="rt2"></span></button>
+      <button data-r="3" class="r3"><b>記得</b><span id="rt3"></span></button>
+      <button data-r="4" class="r4"><b>簡單</b><span id="rt4"></span></button>
+    </div>
+    <div id="rvDone" class="done" hidden></div>
+  </section>
+
+  <!-- 練習 -->
+  <section id="v-practice" class="view" hidden>
+    <div id="pSetup">
+      <div class="modes" id="pModes">
+        <button data-m="spell" aria-pressed="true"><b>聽音拼字</b><span class="muted small">聽發音，打出拼字</span></button>
+        <button data-m="cloze" aria-pressed="false"><b>例句填空</b><span class="muted small">選出句子缺少的字</span></button>
+        <button data-m="phrase" aria-pressed="false"><b>常用片語</b><span class="muted small">看片語選意思</span></button>
+      </div>
+      <div class="panel quizset">
+        <label>範圍
+          <select id="pScope">
+            <option value="learned">學過的單字（不夠時補其他）</option>
+            <option value="weak">常錯的優先</option>
+            <option value="all">全部單字</option>
+          </select>
+        </label>
+        <label>題數
+          <select id="pCount"><option value="10">10 題</option><option value="20">20 題</option></select>
+        </label>
+        <button class="primary" id="pStart">開始練習</button>
+      </div>
+      <p class="muted small" id="pStats"></p>
+    </div>
+    <div id="pQuiz" hidden>
+      <div class="rv-top"><span class="muted" id="pqProg"></span><button class="ghost" id="pqExit">結束</button></div>
+      <div class="flash kq" id="pqCard"><div id="pqQ"></div></div>
+      <form id="pqSpell" class="spell" hidden autocomplete="off">
+        <input id="pqInput" type="text" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" enterkeyhint="done" placeholder="輸入拼字">
+        <div class="btnrow"><button type="button" id="pqHint">提示一個字母</button><button type="button" id="pqSkip">不會，看答案</button><button type="submit" class="primary" id="pqOk">確定</button></div>
+      </form>
+      <div class="choices" id="pqChoices" hidden></div>
+      <div id="pqFeedback" class="feedback" hidden></div>
+      <button class="primary big" id="pqNext" hidden>下一題</button>
+      <div id="pqDone" class="done" hidden></div>
+    </div>
+  </section>
+
+  <!-- 單字本 -->
+  <section id="v-words" class="view" hidden>
+    <div class="search"><input id="wQ" type="search" placeholder="搜尋英文或中文" autocomplete="off" autocapitalize="off"></div>
+    <div class="chips" id="wCats"></div>
+    <p class="muted small" id="wMeta"></p>
+    <div id="wList" class="wlist"></div>
+    <details class="panel addword">
+      <summary>新增自己的單字</summary>
+      <form id="wAdd">
+        <label>英文單字或片語<input id="aWord" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+        <label>詞性（可留空）
+          <select id="aPos"><option value="">—</option><option>n.</option><option>v.</option><option>adj.</option><option>adv.</option><option>prep.</option><option>phr.</option></select></label>
+        <label>中文意思<input id="aMeaning" required autocomplete="off"></label>
+        <label>例句（可留空）<input id="aEx" autocomplete="off" autocapitalize="sentences"></label>
+        <label>例句翻譯（可留空）<input id="aExZh" autocomplete="off"></label>
+        <button class="primary" type="submit">加入</button>
+      </form>
+    </details>
+  </section>
+
+  <!-- 設定 -->
+  <section id="v-settings" class="view" hidden>
+    <div class="panel set">
+      <div class="row"><span>外觀</span>
+        <div class="seg" id="sTheme"><button data-v="normal">一般</button><button data-v="stealth">低調</button></div></div>
+      <div class="row"><span>每日新單字</span>
+        <select id="sNew"><option>5</option><option>10</option><option>15</option><option>20</option><option>30</option></select></div>
+      <div class="row"><span>卡片方向</span>
+        <select id="sDir"><option value="en">看英文想中文</option><option value="zh">看中文想英文</option><option value="mix">混合</option></select></div>
+      <div class="row"><span>自動發音</span><input type="checkbox" id="sAuto" class="switch"></div>
+      <div class="row"><span>口音</span><select id="sAccent"><option value="en-US">美式</option><option value="en-GB">英式</option></select></div>
+      <div class="row"><span>語速</span><select id="sRate"><option value="0.7">慢</option><option value="0.85">稍慢</option><option value="1">正常</option></select></div>
+      <div class="row"><span>聲音</span><select id="sVoice"><option value="">自動選擇</option></select></div>
+      <div class="row"><span>測試發音</span><button id="sTest">Nice to meet you</button></div>
+    </div>
+    <h2>學習範圍</h2>
+    <div class="panel"><p class="muted small">新單字只會從勾選的主題出現。</p><div id="sCats" class="catchk"></div></div>
+    <h2>備份</h2>
+    <div class="panel set">
+      <p class="muted small">資料存在這支手機裡。建議偶爾匯出備份（.db 檔），存到「檔案」App 或電腦的 en-study\backup 資料夾；換手機時再匯入。</p>
+      <div class="btnrow"><button id="sExport">匯出備份</button><label class="filebtn">匯入備份<input type="file" id="sImport" accept=".db,application/octet-stream,application/x-sqlite3"></label></div>
+      <p class="muted small" id="sBackupInfo"></p>
+    </div>
+    <h2>其他</h2>
+    <div class="panel set">
+      <div class="btnrow"><button id="sReset" class="danger">清除所有學習紀錄</button></div>
+      <p class="muted small" id="sVer"></p>
+    </div>
+  </section>
+</main>
+
+<nav class="tabbar">
+  <button data-tab="home" aria-current="page"><span class="ic">⌂</span><span data-alt="首頁">首頁</span></button>
+  <button data-tab="review"><span class="ic">▤</span><span data-alt="卡片">複習</span></button>
+  <button data-tab="practice"><span class="ic">✎</span><span data-alt="測驗">練習</span></button>
+  <button data-tab="words"><span class="ic">☰</span><span data-alt="清單">單字本</span></button>
+  <button data-tab="settings"><span class="ic">⚙</span><span>設定</span></button>
+</nav>
+
+<div id="toast" class="toast" hidden></div>
+<div id="loading" class="loading">載入中…</div>
+
+<script src="vendor/sql-wasm.js"></script>
+<script src="data/words.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
