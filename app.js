@@ -1,5 +1,5 @@
 // 單字卡：英文單字卡（間隔重複）、聽音拼字、例句填空、常用片語、單字本、設定與備份
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const DAY = 86400e3, MIN = 60e3;
@@ -74,7 +74,8 @@ function go(v) {
   if (v === 'review') startReview();
   if (v === 'home') renderHome();
   if (v === 'practice' && !pq) renderPracticeSetup();
-  if (v === 'words') renderWords();
+  if (v === 'words') { wShown = 200; renderWords(); }
+  if (v === 'grammar') { gCur = null; renderGrammarList(); }
   if (v === 'settings') renderSettings();
   window.scrollTo(0, 0);
 }
@@ -239,24 +240,45 @@ function renderHome() {
   $('hCounts').innerHTML = `<span>已學過的單字</span><b>${st.seen || 0} / ${totalW}</b>
     <span>已熟悉（間隔 3 週以上）</span><b>${st.mature || 0}</b>
     <span>學習中</span><b>${st.learning || 0}</b>
-    <span>會拼的單字（連續拼對 2 次）</span><b>${spellOk}</b>`;
+    <span>會拼的單字（連續拼對 2 次）</span><b>${spellOk}</b>
+    <span>文法課（測驗答對 5 題以上）</span><b>${DB.get('SELECT COUNT(*) AS n FROM grammar_progress WHERE best >= 5').n} / ${(window.GRAMMAR || []).length}</b>`;
   $('topinfo').textContent = c.due + c.newLeft ? `今日 ${c.due + c.newLeft} 張` : '';
 }
 
 // ---------- 練習：找出例句裡的單字（含常見變化，例如 booked、ran out of） ----------
-const IRREGULAR = {
-  go: ['went', 'gone', 'goes'], come: ['came'], get: ['got', 'gotten'], take: ['took', 'taken'], make: ['made'], have: ['had', 'has'],
-  know: ['knew', 'known'], think: ['thought'], see: ['saw', 'seen'], hear: ['heard'], speak: ['spoke', 'spoken'], say: ['said'],
-  tell: ['told'], eat: ['ate', 'eaten'], drink: ['drank'], pay: ['paid'], find: ['found'], give: ['gave', 'given'], bring: ['brought'],
-  leave: ['left'], send: ['sent'], forget: ['forgot', 'forgotten'], buy: ['bought'], sell: ['sold'], sleep: ['slept'], feel: ['felt'],
-  meet: ['met'], sit: ['sat'], run: ['ran'], catch: ['caught'], drive: ['drove', 'driven'], put: ['put'], lose: ['lost'], wake: ['woke'],
-  child: ['children'], foot: ['feet'], man: ['men'], woman: ['women'], wife: ['wives'], people: ['person'],
-};
+// 不規則變化（動詞過去式／過去分詞、名詞複數）：例句填空要在例句裡找到這個字
+const IRREGULAR_TEXT = `go went gone goes|come came|get got gotten|take took taken|make made|have had has|know knew known|think thought|see saw seen
+hear heard|speak spoke spoken|say said|tell told|eat ate eaten|drink drank drunk|pay paid|find found|give gave given|bring brought
+leave left|send sent|forget forgot forgotten|buy bought|sell sold|sleep slept|feel felt|meet met|sit sat|run ran|catch caught
+drive drove driven|lose lost|wake woke woken|become became|begin began begun|bite bit bitten|blow blew blown|break broke broken
+choose chose chosen|dig dug|draw drew drawn|fall fell fallen|fight fought|fly flew flown|forgive forgave forgiven|freeze froze frozen
+grow grew grown|hang hung|hide hid hidden|hold held|keep kept|kneel knelt|lead led|lend lent|lie lay lain|light lit|mean meant
+ride rode ridden|ring rang rung|rise rose risen|seek sought|shake shook shaken|shine shone|shoot shot|sing sang sung|sink sank sunk
+slide slid|speed sped|spend spent|stand stood|stick stuck|sting stung|swear swore sworn|sweep swept|swim swam swum|swing swung
+teach taught|tear tore torn|throw threw thrown|understand understood|wear wore worn|weave wove woven|write wrote written|bear bore born borne
+bind bound|breed bred|build built|burn burnt|deal dealt|dream dreamt|feed fed|grind ground|lay laid|leap leapt|bend bent|bleed bled
+steal stole stolen|strike struck|creep crept|shrink shrank shrunk|spin spun|flee fled|forbid forbade forbidden|cling clung|weep wept
+win won|arise arose arisen|awake awoke awoken|slay slew slain|spit spat|strive strove striven|tread trod trodden|undergo underwent undergone
+undertake undertook undertaken|withdraw withdrew withdrawn|forecast forecast|foresee foresaw foreseen|forsake forsook forsaken
+overcome overcame|oversleep overslept|overtake overtook overtaken|overhear overheard|overthrow overthrew overthrown|mislead misled
+mistake mistook mistaken|uphold upheld|withhold withheld|withstand withstood|outgrow outgrew outgrown|outdo outdid outdone|bid bade
+child children|foot feet|tooth teeth|man men|woman women|mouse mice|goose geese|ox oxen|person people|wife wives|knife knives|life lives
+wolf wolves|shelf shelves|half halves|thief thieves|leaf leaves|loaf loaves|self selves|calf calves|crisis crises|analysis analyses
+basis bases|thesis theses|hypothesis hypotheses|diagnosis diagnoses|emphasis emphases|phenomenon phenomena|criterion criteria
+medium media|datum data|bacterium bacteria|curriculum curricula|stimulus stimuli|nucleus nuclei|fungus fungi|cactus cacti
+be am is are was were been being|do did done does|antenna antennae|fling flung|rebuild rebuilt|good better best|bad worse worst|far farther further farthest furthest|little less least|many more most|much more most`;
+const IRREGULAR = {};
+for (const g of IRREGULAR_TEXT.split(/[|\n]/)) { const [k, ...v] = g.trim().split(/\s+/); if (k) IRREGULAR[k] = v; }
 function forms(w) {
-  const x = w.toLowerCase(), base = x.replace(/e$/, ''), last = x.slice(-1);
-  const out = [x, `${x}s`, `${x}es`, `${x}ed`, `${x}d`, `${x}ing`, `${base}ing`, `${x}${last}ed`, `${x}${last}ing`, `${x}'s`, ...(IRREGULAR[x] || [])];
-  if (/[^aeiou]y$/.test(x)) out.push(`${x.slice(0, -1)}ies`, `${x.slice(0, -1)}ied`);
-  return [...new Set(out)].sort((a, b) => b.length - a.length);
+  const x = w.toLowerCase(), base = x.replace(/e$/, ''), last = x.slice(-1), stem = x.slice(0, -1);
+  const out = [x, `${x}s`, `${x}es`, `${x}ed`, `${x}d`, `${x}ing`, `${base}ing`, `${x}${last}ed`, `${x}${last}ing`, `${x}'s`,
+    `${x}er`, `${x}est`, `${x}r`, `${x}st`, `${x}${last}er`, `${x}${last}est`, ...(IRREGULAR[x] || [])];
+  if (/[^aeiou]y$/.test(x)) out.push(`${stem}ies`, `${stem}ied`, `${stem}ier`, `${stem}iest`);
+  if (/ie$/.test(x)) out.push(`${x.slice(0, -2)}ying`);
+  if (/ic$/.test(x)) out.push(`${x}ked`, `${x}king`);
+  // 複合字：grandchild → grandchildren、overcome → overcame
+  for (const [k, v] of Object.entries(IRREGULAR)) if (x.length > k.length + 2 && x.endsWith(k)) out.push(...v.map(f => x.slice(0, -k.length) + f));
+  return [...new Set(out)].sort((p, q) => q.length - p.length);
 }
 const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 function findInSentence(word, sentence) {
@@ -266,6 +288,8 @@ function findInSentence(word, sentence) {
   const first = forms(parts[0]).map(reEsc).join('|');
   const rest = parts.slice(1).map(p => `\\s+${reEsc(p)}`).join('');
   const m = new RegExp(`(^|[^A-Za-z'])((?:${first})${rest})(?![A-Za-z])`, 'i').exec(s);
+  // 「be ＋…」的片語遇到 I'm／you're 這種縮寫：只挖空 be 後面的部分
+  if (!m && parts[0].toLowerCase() === 'be' && parts.length > 1) return findInSentence(parts.slice(1).join(' '), s);
   if (!m) return null;
   const start = m.index + m[1].length;
   return { before: s.slice(0, start), hit: m[2], after: s.slice(start + m[2].length) };
@@ -295,8 +319,11 @@ function pWeight(w, mode, weakFirst) {
   const base = Math.max(0.3, 1 + s.wrong * 2 - Math.min(s.streak, 3) * 0.3);
   return weakFirst && s.wrong > 0 && s.streak < 2 ? base * 4 : base;
 }
+// 例句填空要逐句比對（8,000 句很慢）：先用便宜的條件篩，學過的全部比對，其他只抽 400 句比對
+const cheap = { spell: MODES.spell.pool, cloze: w => !!w.ex_en, phrase: MODES.phrase.pool };
 function buildPool(mode, scope) {
-  const all = DB.all('SELECT w.*, c.word_id AS seen FROM words w LEFT JOIN cards c ON c.word_id = w.id').filter(MODES[mode].pool);
+  let all = DB.all('SELECT w.*, c.word_id AS seen FROM words w LEFT JOIN cards c ON c.word_id = w.id').filter(cheap[mode]);
+  if (mode === 'cloze') all = [...all.filter(w => w.seen), ...shuffle(all.filter(w => !w.seen)).slice(0, 400)].filter(MODES.cloze.pool);
   if (scope !== 'learned') return all;
   const seen = all.filter(w => w.seen);
   if (seen.length >= 8) return seen;
@@ -314,7 +341,7 @@ function startPractice() {
   const scope = $('pScope').value;
   const pool = buildPool(pMode, scope);
   if (pool.length < 4) return toast('可以練習的字太少，先去複習一些單字吧');
-  const all = DB.all('SELECT * FROM words').filter(MODES[pMode].pool);     // 選項用
+  const all = DB.all('SELECT * FROM words').filter(cheap[pMode]);     // 選項用（只需要同詞性的字，不用比對例句）
   pq = { mode: pMode, scope, pool, all, total: Number($('pCount').value), n: 0, right: 0, used: new Set(), wrongs: [] };
   $('pSetup').hidden = true; $('pQuiz').hidden = false; $('pqDone').hidden = true;
   nextPQ();
@@ -434,7 +461,7 @@ $('pStart').addEventListener('click', startPractice);
 $('pqExit').addEventListener('click', () => { pq = null; speechSynthesis?.cancel(); renderPracticeSetup(); window.scrollTo(0, 0); });
 
 // ---------- 單字本 ----------
-let wCat = '全部';
+let wCat = '全部', wShown = 200;
 function renderWords() {
   const cats = ['全部', ...WORD_CATEGORIES, ...(DB.get('SELECT 1 FROM words WHERE custom = 1') ? ['自訂'] : [])];
   $('wCats').innerHTML = cats.map(c => `<button data-cat="${esc(c)}" aria-pressed="${c === wCat}">${esc(c)}</button>`).join('');
@@ -444,9 +471,11 @@ function renderWords() {
   else if (wCat !== '全部') { where.push('w.category = ?'); args.push(wCat); }
   if (q) { where.push('(w.word LIKE ? OR w.meaning LIKE ?)'); args.push(`%${q}%`, `%${q}%`); }
   const rows = DB.all(`SELECT w.*, c.state, c.interval, c.due FROM words w LEFT JOIN cards c ON c.word_id = w.id
-    ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY w.custom DESC, w.id LIMIT 2000`, args);
+    ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY w.custom DESC, w.id`, args);
+  const total = rows.length, learnedAll = rows.filter(r => r.state).length;
+  rows.length = Math.min(rows.length, wShown);
   const learned = rows.filter(r => r.state).length;
-  $('wMeta').textContent = `${rows.length} 個單字・已學 ${learned} 個`;
+  $('wMeta').textContent = `${total} 個單字・已學 ${learnedAll}${total > rows.length ? `（顯示前 ${rows.length} 個）` : ''}`;
   const stTxt = r => !r.state ? '未學' : r.state === 'review' ? (r.interval >= 21 ? '熟悉' : '複習中') : '學習中';
   $('wList').innerHTML = rows.map(r => `<details class="witem">
     <summary><span><span class="w">${esc(r.word)}</span>${r.pos ? `<span class="rd">${esc(r.pos)}</span>` : ''}</span>
@@ -455,10 +484,11 @@ function renderWords() {
       <div>${sayBtn(r.word, `🔊 ${esc(r.word)}`)}</div>
       ${r.ex_en ? `<div><span class="exen">${esc(r.ex_en)}</span>${sayInline(r.ex_en)}<br><span class="muted">${esc(r.ex_zh || '')}</span></div>` : ''}
       <div class="muted small">${esc(r.category)}${r.state ? `・下次複習 ${new Date(r.due).toLocaleDateString('zh-TW')}` : ''}${r.custom ? `・<button class="ghost" data-delw="${r.id}">刪除這個單字</button>` : ''}</div>
-    </div></details>`).join('') || '<p class="muted">找不到符合的單字。</p>';
+    </div></details>`).join('') + (total > rows.length ? `<button class="ghost wmore" id="wMore">再顯示 200 個（還有 ${total - rows.length} 個）</button>` : '') || '<p class="muted">找不到符合的單字。</p>';
+  if ($('wMore')) $('wMore').onclick = () => { wShown += 200; renderWords(); };
 }
-$('wCats').addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (b) { wCat = b.dataset.cat; renderWords(); } });
-$('wQ').addEventListener('input', () => renderWords());
+$('wCats').addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (b) { wCat = b.dataset.cat; wShown = 200; renderWords(); } });
+$('wQ').addEventListener('input', () => { wShown = 200; clearTimeout(renderWords.t); renderWords.t = setTimeout(renderWords, 200); });
 $('wList').addEventListener('click', e => {
   const s = e.target.closest('[data-say]'); if (s) { e.preventDefault(); speak(s.dataset.say); return; }
   const d = e.target.closest('[data-delw]');
@@ -484,6 +514,96 @@ $('wAdd').addEventListener('submit', e => {
   toast('已加入，會排在新單字的最前面'); wCat = '自訂'; renderWords();
 });
 
+// ---------- 文法：課程列表、課文、測驗 ----------
+let gCur = null, gq = null;
+const gProg = id => DB.get('SELECT * FROM grammar_progress WHERE lesson_id = ?', [id]);
+// 課文的簡單排版：**粗體**、換行、「- 」開頭為條列
+function gText(t) {
+  const lines = String(t || '').split('\n'), out = [];
+  let list = false;
+  for (const l of lines) {
+    const html = esc(l.replace(/^\s*-\s+/, '')).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+    if (/^\s*-\s+/.test(l)) { if (!list) { out.push('<ul>'); list = true; } out.push(`<li>${html}</li>`); }
+    else { if (list) { out.push('</ul>'); list = false; } if (l.trim()) out.push(`<div>${html}</div>`); }
+  }
+  if (list) out.push('</ul>');
+  return out.join('');
+}
+function renderGrammarList() {
+  $('gLesson').hidden = true; $('gList').hidden = false;
+  const G = window.GRAMMAR || [];
+  if (!G.length) { $('gList').innerHTML = '<p class="muted">還沒有文法課程。</p>'; return; }
+  const done = G.filter(g => (gProg(g.id)?.best || 0) >= 5).length;
+  let html = `<p class="muted small">共 ${G.length} 課，已完成 ${done} 課。每課看完重點和例句後做 6 題小測驗，答對 5 題算完成。</p>`, last = '';
+  for (const g of G) {
+    if (g.level !== last) { html += `<div class="glevel">${esc(g.level)}</div>`; last = g.level; }
+    const p = gProg(g.id);
+    html += `<button class="gitem" data-g="${esc(g.id)}"><b>${esc(g.title)}</b><span class="s">${esc(g.summary || '')}</span>
+      <span class="sc ${p && p.best >= 5 ? 'ok' : ''}">${p ? `${p.best >= 5 ? '✓ ' : ''}${p.best}/${p.total}` : '未讀'}</span></button>`;
+  }
+  $('gList').innerHTML = html;
+}
+$('gList').addEventListener('click', e => { const b = e.target.closest('[data-g]'); if (b) openLesson(b.dataset.g); });
+function openLesson(id) {
+  const g = (window.GRAMMAR || []).find(x => x.id === id); if (!g) return;
+  gCur = g; gq = null;
+  $('gList').hidden = true; $('gLesson').hidden = false;
+  const p = gProg(id);
+  $('gLesson').innerHTML = `<div class="rv-top"><button class="ghost" id="gBack">‹ 課程列表</button><span class="muted small">${esc(g.level)}</span></div>
+    <h2 style="color:var(--fg);font-size:1.25rem;margin:8px 0 4px">${esc(g.title)}</h2><p class="muted small" style="margin-top:0">${esc(g.summary || '')}</p>
+    ${(g.sections || []).map(x => `<div class="gsec"><h3>${esc(x.h)}</h3>${gText(x.body)}</div>`).join('')}
+    ${g.examples?.length ? `<div class="gsec"><h3>例句</h3>${g.examples.map(([en, zh]) => `<div class="gex"><span class="en">${esc(en)}</span>${sayInline(en)}<br><span class="muted small">${esc(zh)}</span></div>`).join('')}</div>` : ''}
+    ${g.mistakes?.length ? `<div class="gsec gmis"><h3>常見錯誤</h3>${g.mistakes.map(([w, r, why]) => `<div class="gex"><span class="w">${esc(w)}</span><br><span class="r">✓ ${esc(r)}</span><br><span class="muted small">${esc(why)}</span></div>`).join('')}</div>` : ''}
+    <button class="primary big" id="gStart">開始小測驗（${(g.quiz || []).length} 題）${p ? `・最佳 ${p.best}/${p.total}` : ''}</button>
+    <div id="gQuiz" hidden></div>`;
+  $('gBack').onclick = () => { gCur = null; renderGrammarList(); window.scrollTo(0, 0); };
+  $('gStart').onclick = startGQuiz;
+  window.scrollTo(0, 0);
+}
+$('gLesson').addEventListener('click', e => { const b = e.target.closest('[data-say]'); if (b) speak(b.dataset.say); });
+function startGQuiz() {
+  const g = gCur; if (!g?.quiz?.length) return;
+  gq = { i: 0, right: 0, t0: Date.now(), order: shuffle(g.quiz.map((_, i) => i)) };
+  $('gStart').hidden = true; $('gQuiz').hidden = false;
+  showGQ();
+  $('gQuiz').scrollIntoView({ behavior: 'smooth' });
+}
+function showGQ() {
+  const g = gCur, q = g.quiz[gq.order[gq.i]];
+  // 選項順序打亂，記住正確答案的新位置
+  const opts = shuffle(q.options.map((o, i) => ({ o, ok: i === q.answer })));
+  gq.locked = false;
+  $('gQuiz').innerHTML = `<div class="rv-top"><span class="muted small">第 ${gq.i + 1} / ${g.quiz.length} 題・答對 ${gq.right}</span></div>
+    <div class="flash kq"><div class="gq">${esc(q.q)}</div></div>
+    <div class="gopts">${opts.map(x => `<button data-ok="${x.ok ? 1 : 0}">${esc(x.o)}</button>`).join('')}</div>
+    <div id="gFb" class="feedback" hidden></div><button class="primary big" id="gNext" hidden></button>`;
+  $('gQuiz').querySelector('.gopts').onclick = e => {
+    const b = e.target.closest('[data-ok]'); if (!b || gq.locked) return;
+    gq.locked = true;
+    const ok = b.dataset.ok === '1';
+    b.classList.add(ok ? 'right' : 'wrong');
+    if (!ok) $('gQuiz').querySelector('[data-ok="1"]').classList.add('right');
+    if (ok) gq.right++;
+    $('gFb').className = `feedback ${ok ? 'ok' : 'ng'}`;
+    $('gFb').innerHTML = `<div class="fb-head">${ok ? '✓ 答對了' : '✗ 答錯了'}</div><div>${esc(q.explain || '')}</div>`;
+    $('gFb').hidden = false;
+    $('gNext').hidden = false; $('gNext').textContent = gq.i + 1 < g.quiz.length ? '下一題' : '看結果';
+    $('gNext').onclick = () => { gq.i++; if (gq.i < g.quiz.length) showGQ(); else endGQuiz(); };
+  };
+}
+function endGQuiz() {
+  const g = gCur, n = g.quiz.length, now = Date.now();
+  DB.run(`INSERT INTO grammar_progress (lesson_id, best, last, total, tries, done_at) VALUES (?, ?, ?, ?, 1, ?)
+    ON CONFLICT(lesson_id) DO UPDATE SET best = MAX(best, excluded.best), last = excluded.last, total = excluded.total, tries = tries + 1, done_at = excluded.done_at`, [g.id, gq.right, gq.right, n, now]);
+  DB.run('INSERT INTO review_log (ts, day, kind, item, rating, ms) VALUES (?, ?, ?, ?, ?, ?)', [now, today(now), 'grammar', g.id, gq.right >= n - 1 ? 1 : 0, now - gq.t0]);
+  const idx = (window.GRAMMAR || []).indexOf(g), next = window.GRAMMAR[idx + 1];
+  $('gQuiz').innerHTML = `<div class="done"><div class="big-en">${gq.right} / ${n}</div><div>${gq.right === n ? '全對，太厲害了！' : gq.right >= n - 1 ? '這課完成了！' : '再看一次重點，然後重做一次。'}</div>
+    <div class="btnrow"><button class="ghost" id="gAgain">再做一次</button>${next ? '<button class="primary" id="gNextLesson">下一課</button>' : ''}<button class="ghost" id="gList2">課程列表</button></div></div>`;
+  $('gAgain').onclick = startGQuiz;
+  if ($('gNextLesson')) $('gNextLesson').onclick = () => openLesson(next.id);
+  $('gList2').onclick = () => { gCur = null; renderGrammarList(); window.scrollTo(0, 0); };
+}
+
 // ---------- 設定 ----------
 function renderSettings() {
   applyTheme();
@@ -491,6 +611,7 @@ function renderSettings() {
   $('sRate').value = String(S.rate); $('sAccent').value = S.accent;
   if ('speechSynthesis' in window) loadVoices();
   const sel = new Set(S.cats || WORD_CATEGORIES);
+  $('sGroups').innerHTML = Object.entries(CATEGORY_GROUPS).filter(([, v]) => v.length).map(([k]) => `<button data-grp="${esc(k)}">只學${esc(k)}</button>`).join('') + '<button data-grp="*">全部</button>';
   $('sCats').innerHTML = WORD_CATEGORIES.map(c => `<label><input type="checkbox" value="${esc(c)}" ${sel.has(c) ? 'checked' : ''}>${esc(c)}</label>`).join('');
   const last = DB.setting('lastBackup', null);
   $('sBackupInfo').textContent = last ? `上次匯出：${last}` : '還沒有匯出過備份。';
@@ -504,6 +625,11 @@ $('sRate').addEventListener('change', e => setS('rate', Number(e.target.value)))
 $('sAccent').addEventListener('change', e => { setS('accent', e.target.value); setS('voice', ''); loadVoices(); });
 $('sVoice').addEventListener('change', e => setS('voice', e.target.value));
 $('sTest').addEventListener('click', () => speak('Nice to meet you. How are you today?'));
+$('sGroups').addEventListener('click', e => {
+  const b = e.target.closest('[data-grp]'); if (!b) return;
+  setS('cats', b.dataset.grp === '*' ? null : CATEGORY_GROUPS[b.dataset.grp]);
+  renderSettings(); toast(b.dataset.grp === '*' ? '新單字從全部範圍出現' : `新單字只從「${b.dataset.grp}」出現`);
+});
 $('sCats').addEventListener('change', () => {
   const v = [...$('sCats').querySelectorAll('input:checked')].map(i => i.value);
   if (!v.length) { toast('至少要選一個主題'); renderSettings(); return; }

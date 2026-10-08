@@ -1,9 +1,9 @@
 // 離線用：第一次打開時把 App 檔案存到手機，之後沒有網路也能開。
 // 改版時把 VERSION 加 1，手機下次連上網路就會更新。
-const VERSION = 'enstudy-v1';
+const VERSION = 'enstudy-v2';
 const FILES = [
   './', 'index.html', 'style.css', 'app.js', 'db.js', 'manifest.webmanifest',
-  'data/words.js', 'vendor/sql-wasm.js', 'vendor/sql-wasm.wasm',
+  'data/vocab.js', 'data/grammar.js', 'data/words.js', 'vendor/sql-wasm.js', 'vendor/sql-wasm.wasm',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
 

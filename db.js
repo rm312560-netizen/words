@@ -77,6 +77,15 @@
       last_ts INTEGER,
       PRIMARY KEY (word_id, mode)
     );
+    -- 文法課的測驗成績
+    CREATE TABLE IF NOT EXISTS grammar_progress (
+      lesson_id TEXT PRIMARY KEY,
+      best      INTEGER NOT NULL DEFAULT 0,   -- 最高答對題數
+      last      INTEGER NOT NULL DEFAULT 0,
+      total     INTEGER NOT NULL DEFAULT 0,   -- 題數
+      tries     INTEGER NOT NULL DEFAULT 0,
+      done_at   INTEGER
+    );
     CREATE TABLE IF NOT EXISTS settings (
       key   TEXT PRIMARY KEY,
       value TEXT
@@ -84,12 +93,16 @@
   `;
 
   // 內建單字：新版本加了字就補進去；內建字的內容以程式為準，自訂單字（custom = 1）不動
-  function seedWords() {
+  // 單字庫有 8,000 筆：版本沒變就不重寫（每次打開都寫會變慢）
+  function seedWords(force = false) {
+    const ver = db.exec("SELECT value FROM settings WHERE key = 'dataVersion'")[0]?.values[0]?.[0];
+    if (!force && ver === JSON.stringify(window.DATA_VERSION)) return;
     const up = db.prepare(`INSERT INTO words (key, word, pos, meaning, ex_en, ex_zh, category, custom) VALUES (?, ?, ?, ?, ?, ?, ?, 0)
       ON CONFLICT(key) DO UPDATE SET word = excluded.word, pos = excluded.pos, meaning = excluded.meaning,
         ex_en = excluded.ex_en, ex_zh = excluded.ex_zh, category = excluded.category`);
     db.exec('BEGIN');
     for (const w of window.WORDS) up.run([`${w.word}|${w.pos}`, w.word, w.pos || null, w.meaning, w.exEn || null, w.exZh || null, w.category]);
+    db.run("INSERT INTO settings (key, value) VALUES ('dataVersion', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", [JSON.stringify(window.DATA_VERSION)]);
     db.exec('COMMIT');
     up.free();
   }

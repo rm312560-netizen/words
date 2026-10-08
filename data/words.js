@@ -446,6 +446,28 @@ see you|phr.|再見|See you next week!|下週見！
       words.push({ id: id++, word, pos, meaning, exEn, exZh, category, phrase: pos === 'phr.' });
     }
   }
+  // 高中～大學單字與進階片語（data/vocab.js，由 build-vocab.js 產生）；依級別由淺到深
+  const LEVEL_NAMES = { 1: '高中 1 級', 2: '高中 2 級', 3: '高中 3 級', 4: '高中 4 級', 5: '高中 5 級', 6: '高中 6 級', 7: '大學學術', 8: '進階片語（高中）', 9: '進階片語（大學）' };
+  const levelCats = [];
+  if (window.VOCAB) {
+    const have = new Set(words.map(w => w.word.toLowerCase()));
+    for (const line of window.VOCAB.split('\n')) {
+      const [lv, word, pos, meaning, exEn, exZh] = line.split('|');
+      if (!word || have.has(word.toLowerCase())) continue;
+      have.add(word.toLowerCase());
+      const category = LEVEL_NAMES[lv] || '其他';
+      if (!levelCats.includes(category)) levelCats.push(category);
+      words.push({ id: id++, word, pos, meaning, exEn, exZh, category, phrase: pos === 'phr.' });
+    }
+  }
   window.WORDS = words;
-  window.WORD_CATEGORIES = Object.keys(RAW);
+  window.WORD_CATEGORIES = [...Object.keys(RAW), ...levelCats];
+  // 設定頁的快速選擇
+  window.CATEGORY_GROUPS = {
+    '日常會話・旅遊': Object.keys(RAW),
+    '高中（大考 1～6 級）': levelCats.filter(c => c.startsWith('高中')),
+    '大學學術': levelCats.filter(c => c === '大學學術'),
+    '進階片語': levelCats.filter(c => c.startsWith('進階片語')),
+  };
+  window.DATA_VERSION = `${words.length}-${window.VOCAB_VERSION || '0'}`;
 })();
